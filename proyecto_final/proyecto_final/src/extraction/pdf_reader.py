@@ -5,87 +5,94 @@ Utiliza PyMuPDF para obtener el texto de los artículos científicos
 del corpus del proyecto.
 """
 
-import pymupdf
+import logging
 import re
+from typing import Optional
 
-def extraer_texto_pdf(ruta_pdf):
-    """
-    Extrae el texto completo de un archivo PDF.
+import pymupdf
+
+from src.exceptions import ExtractionError
+
+logger = logging.getLogger(__name__)
+
+
+def extraer_texto_pdf(ruta_pdf: str) -> str:
+    """Extrae el texto completo de un archivo PDF.
 
     Args:
-        ruta_pdf (str): Ruta del archivo PDF.
+        ruta_pdf: Ruta del archivo PDF.
 
     Returns:
-        str: Texto completo del documento.
+        Texto completo del documento.
+
+    Raises:
+        ExtractionError: Si el archivo no existe o no puede leerse.
     """
+    try:
+        with pymupdf.open(ruta_pdf) as documento:
+            partes_texto = [pagina.get_text() for pagina in documento]
+            texto_completo = "\n".join(partes_texto)
 
-    # Al utilizar with, el PDF se cierra automáticamente.
-    with pymupdf.open(ruta_pdf) as documento:
+        logger.debug("PDF leído: %s (%d caracteres)", ruta_pdf, len(texto_completo))
+        return texto_completo
 
-        # Lista que almacenará el texto de cada página.
-        partes_texto = []
-
-        # Recorremos las páginas del documento.
-        for pagina in documento:
-            texto = pagina.get_text()
-            partes_texto.append(texto)
-
-        # Unimos el contenido de todas las páginas.
-        texto_completo = "\n".join(partes_texto)
-
-    return texto_completo
+    except Exception as error:
+        raise ExtractionError(
+            f"No se pudo leer el PDF '{ruta_pdf}': {error}"
+        ) from error
 
 
-def extraer_abstract(texto):
+def extraer_abstract(texto: str) -> Optional[str]:
+    """Busca el abstract en el texto de un artículo científico.
+
+    Aplica reglas generales y casos especiales para artículos
+    cuya estructura no sigue el patrón estándar.
+
+    Args:
+        texto: Texto completo extraído de un PDF.
+
+    Returns:
+        Texto del abstract, o ``None`` si no se encontró.
     """
-    Busca el abstract y trata de identificar su final.
-    Devuelve None si no encuentra límites reconocibles.
-    """
-    
-    # Caso especial del artículo 7:
-    # las palabras clave aparecen antes del resumen.
+    if not texto or not texto.strip():
+        return None
+
+    # ── Casos especiales por artículo ───────────────────────────────
+
+    # Artículo 7: las palabras clave aparecen antes del resumen.
     marcador_7 = "The rapid expansion of Learning Analytics"
-
     if marcador_7 in texto:
         inicio = texto.find(marcador_7)
         patron_final_7 = re.compile(
             r"(?im)^[ \t]*1\.\s*Introduction[ \t]*$"
         )
         final = patron_final_7.search(texto, inicio)
-
         if final:
             return texto[inicio:final.start()].strip()
 
-    # Caso especial del artículo 9:
-    # el resumen termina antes del primer párrafo
+    # Artículo 9: el resumen termina antes del primer párrafo
     # de la introducción, que no tiene encabezado visible.
     marcador_9 = "From unique educational perspectives"
     final_9 = "Since Alan Turing first articulated"
-
     if marcador_9 in texto and final_9 in texto:
         inicio = texto.find(marcador_9)
         fin = texto.find(final_9, inicio)
-
         if fin > inicio:
             return texto[inicio:fin].strip()
 
-    # Caso especial del artículo 17:
-    # el encabezado Keywords incluye los términos
+    # Artículo 17: el encabezado Keywords incluye los términos
     # en la misma línea.
     marcador_17 = (
         "Artificial intelligence (AI), as an emerging technology"
     )
-
     if marcador_17 in texto:
         inicio = texto.find(marcador_17)
-        patron_final_17 = re.compile(
-            r"(?im)^[ \t]*Keywords\b"
-        )
+        patron_final_17 = re.compile(r"(?im)^[ \t]*Keywords\b")
         final = patron_final_17.search(texto, inicio)
-
         if final:
             return texto[inicio:final.start()].strip()
 
+    # ── Patrón general ──────────────────────────────────────────────
 
     # Reconocemos los encabezados con y sin espacios.
     patron_inicio = re.compile(
@@ -105,6 +112,7 @@ def extraer_abstract(texto):
         inicio_encontrado = patron_inicio.search(texto)
 
     if inicio_encontrado is None:
+        logger.warning("No se encontró el encabezado del abstract.")
         return None
 
     inicio = inicio_encontrado.end()
@@ -123,12 +131,13 @@ def extraer_abstract(texto):
     final_encontrado = patron_final.search(texto, inicio)
 
     if final_encontrado is None:
+        logger.warning("No se encontró el final del abstract.")
         return None
 
     abstract = texto[inicio:final_encontrado.start()].strip()
     # Eliminamos signos sobrantes al comienzo del resumen.
     abstract = abstract.lstrip(" :\t\n\r")
-    
+
     if not abstract:
         return None
 

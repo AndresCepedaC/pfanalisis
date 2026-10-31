@@ -1,36 +1,58 @@
-
 """
 Guarda las frecuencias de las palabras en un archivo CSV.
 """
 
 import csv
-import sys
+import logging
+from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from src.config import FREQUENCIES_CSV
 
-from src.preprocessing.frecuencia_palabras import calcular_frecuencias
+logger = logging.getLogger(__name__)
 
 
-def guardar_frecuencias():
-    frecuencias, procesados, total = calcular_frecuencias()
+def guardar_frecuencias(
+    frecuencias: Counter,
+    ruta_salida: Path = FREQUENCIES_CSV,
+) -> Path:
+    """Escribe las frecuencias de palabras en un archivo CSV.
 
-    carpeta_salida = Path("data")
-    carpeta_salida.mkdir(exist_ok=True)
+    Args:
+        frecuencias: Contador con pares (palabra, frecuencia).
+        ruta_salida: Ruta del archivo CSV de salida.
 
-    ruta_salida = carpeta_salida / "frecuencias_palabras.csv"
+    Returns:
+        Ruta absoluta del archivo generado.
+    """
+    ruta_salida.parent.mkdir(parents=True, exist_ok=True)
 
     with open(ruta_salida, "w", newline="", encoding="utf-8") as archivo:
         escritor = csv.writer(archivo)
         escritor.writerow(["palabra", "frecuencia"])
 
-        for palabra, cantidad in frecuencias.items():
+        for palabra, cantidad in frecuencias.most_common():
             escritor.writerow([palabra, cantidad])
 
-    print(f"Artículos procesados: {procesados}/{total}")
-    print(f"Palabras diferentes: {len(frecuencias)}")
-    print(f"Archivo guardado en: {ruta_salida}")
+    logger.info(
+        "Frecuencias guardadas: %d palabras → %s",
+        len(frecuencias),
+        ruta_salida,
+    )
+
+    return ruta_salida.resolve()
 
 
 if __name__ == "__main__":
-    guardar_frecuencias()
+    # Ejecutar con: python -m src.preprocessing.guardar_frecuencias
+    from src.config import configurar_logging
+    from src.preprocessing.frecuencia_palabras import calcular_frecuencias
+
+    configurar_logging()
+
+    frecuencias, procesados, total = calcular_frecuencias()
+    ruta = guardar_frecuencias(frecuencias)
+
+    print(f"Artículos procesados: {procesados}/{total}")
+    print(f"Palabras diferentes: {len(frecuencias)}")
+    print(f"Archivo guardado en: {ruta}")

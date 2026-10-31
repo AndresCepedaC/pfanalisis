@@ -1,15 +1,28 @@
-
 """
 Implementación de Radix Sort para enteros no negativos.
 
 Ordena los números por sus dígitos, comenzando
 por las unidades, luego las decenas y así sucesivamente.
+
+Complejidad temporal: O(d · (n + b)) donde d = dígitos, b = base.
+Complejidad espacial: O(n + b).
 """
 
+from typing import List
 
-def ordenar_por_digito(datos, exponente):
-    """Ordena establemente según un dígito decimal."""
+from src.exceptions import SortingError
 
+
+def _ordenar_por_digito(datos: List[int], exponente: int) -> List[int]:
+    """Ordena establemente según un dígito decimal.
+
+    Args:
+        datos: Lista de enteros no negativos.
+        exponente: Potencia de 10 que identifica el dígito a evaluar.
+
+    Returns:
+        Nueva lista ordenada por el dígito seleccionado.
+    """
     cantidad = len(datos)
     resultado = [0] * cantidad
     conteo = [0] * 10
@@ -34,14 +47,23 @@ def ordenar_por_digito(datos, exponente):
     return resultado
 
 
-def radix_sort(datos):
-    """Devuelve una nueva lista ordenada con Radix Sort."""
+def radix_sort(datos: List[int]) -> List[int]:
+    """Devuelve una nueva lista ordenada con Radix Sort.
 
+    Args:
+        datos: Lista de enteros no negativos.
+
+    Returns:
+        Nueva lista con los mismos elementos en orden ascendente.
+
+    Raises:
+        SortingError: Si la lista contiene enteros negativos.
+    """
     if not datos:
         return []
 
     if any(numero < 0 for numero in datos):
-        raise ValueError(
+        raise SortingError(
             "Radix Sort requiere enteros no negativos."
         )
 
@@ -50,7 +72,7 @@ def radix_sort(datos):
     exponente = 1
 
     while maximo // exponente > 0:
-        resultado = ordenar_por_digito(resultado, exponente)
+        resultado = _ordenar_por_digito(resultado, exponente)
         exponente *= 10
 
     return resultado
